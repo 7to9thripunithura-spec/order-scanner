@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Order Scanner & CSV Export</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --warning: #ca8a04;
+            --error: #dc2626;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        h1 { margin: 0; font-size: 1.5rem; }
+        p { color: #64748b; font-size: 0.9rem; margin-top: 5px; }
+
+        /* Scanner Area */
+        .scanner-card {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        #reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        /* Status Messages */
+        #status-msg {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: none;
+        }
+        .status-success { background-color: #dcfce7; color: var(--success); border: 1px solid #86efac; }
+        .status-error { background-color: #fee2e2; color: var(--error); border: 1px solid #fca5a5; }
+        .status-warn { background-color: #fef9c3; color: var(--warning); border: 1px solid #fde047; }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        button {
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            font-size: 0.9rem;
+        }
+        button:active { opacity: 0.8; }
+        
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-download { background-color: var(--success); color: white; }
+        .btn-clear { background-color: var(--error); color: white; }
+
+        /* Data Table */
+        .table-container {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+        }
+
+        .empty-state {
+            padding: 20px;
+            text-align: center;
+            color: #94a3b8;
+        }
+
+        /* Responsive Tweaks */
+        @media (max-width: 600px) {
+            h1 { font-size: 1.25rem; }
+            th, td { padding: 8px; font-size: 0.8rem; }
+            .controls { flex-direction: column; }
+            button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>📦 Order Scanner</h1>
+        <p>Scan QR codes to log orders & export CSV</p>
+    </header>
+
+    <div class="scanner-card">
+        <div id="reader"></div>
+        <div id="status-msg"></div>
+    </div>
+
+    <div class="controls">
+        <button id="start-btn" class="btn-primary" onclick="startScanner()">Activate Camera</button>
+        <button id="stop-btn" class="btn-primary" onclick="stopScanner()" style="display:none; background-color: #64748b;">Stop Camera</button>
+        <button class="btn-download" onclick="exportToCSV()">Download CSV</button>
+    </div>
+
+    <div class="table-container">
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Name</th>
+                    <th>Pin Code</th>
+                    <th>Subtotal</th>
+                    <th>Ship</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                </tbody>
+        </table>
+        <div id="empty-state" class="empty-state">No scans yet.</div>
+    </div>
+    
+    <div style="text-align: right; margin-top: 10px;">
+        <button class="btn-clear" onclick="clearData()" style="padding: 5px 10px; font-size: 0.8rem;">Clear All Data</button>
+    </div>
+</div>
+
+<script>
+    let html5QrcodeScanner;
+    let scannedData = [];
+    let isScanning = false;
+
+    async function startScanner() {
+        const readerElement = document.getElementById("reader");
+        document.getElementById("start-btn").style.display = 'none';
+        document.getElementById("stop-btn").style.display = 'inline-block';
+        showStatus("Camera starting...", "warn");
+
+        try {
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            
+            const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+            
+            // Prefer back camera on mobile
+            await html5QrcodeScanner.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess, 
+                onScanFailure
+            );
+            
+            showStatus("Camera Active. Scan a QR Code.", "success");
+            isScanning = true;
+
+        } catch (err) {
+            console.error(err);
+            showStatus("Error starting camera: " + err, "error");
+            stopScanner();
+        }
+    }
+
+    async function stopScanner() {
+        if (html5QrcodeScanner && isScanning) {
+            await html5QrcodeScanner.stop();
+            html5QrcodeScanner.clear();
+            isScanning = false;
+        }
+        document.getElementById("start-btn").style.display = 'inline-block';
+        document.getElementById("stop-btn").style.display = 'none';
+        showStatus("Camera stopped.", "warn");
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        try {
+            // 1. Parse Data
+            // Expected JSON: { "id": "123", "name": "John", "sub": 100, "ship": 10, "pin": "560001" }
+            let data;
+            try {
+                data = JSON.parse(decodedText);
+            } catch (e) {
+                throw new Error("Invalid QR Format. Must be JSON.");
+            }
+
+            // Validate fields
+            if(!data.id || !data.name) {
+                throw new Error("Missing Order ID or Name.");
+            }
+
+            // 2. Check Duplicate
+            const isDuplicate = scannedData.some(item => item.id === data.id);
+            if (isDuplicate) {
+                showStatus(`⚠️ Duplicate Order: ${data.id}`, "error");
+                html5QrcodeScanner.pause();
+                setTimeout(() => html5QrcodeScanner.resume(), 2000);
+                return;
+            }
+
+            // 3. Process Data
+            const subtotal = parseFloat(data.sub) || 0;
+            const shipping = parseFloat(data.ship) || 0;
+            const total = subtotal + shipping;
+            const pin = data.pin || "N/A"; // Handle missing pin
+
+            const record = {
+                id: data.id,
+                name: data.name,
+                pin: pin,
+                sub: subtotal.toFixed(2),
+                ship: shipping.toFixed(2),
+                total: total.toFixed(2)
+            };
+
+            // 4. Store & UI Update
+            scannedData.push(record);
+            updateTable();
+            
+            showStatus(`✅ Scanned: ${data.id}`, "success");
+            
+            // Pause briefly to prevent rapid-fire double scanning
+            html5QrcodeScanner.pause();
+            setTimeout(() => html5QrcodeScanner.resume(), 1500);
+
+        } catch (err) {
+            showStatus(err.message, "error");
+        }
+    }
+
+    function onScanFailure(error) {
+        // Ignored to prevent console spam
+    }
+
+    // --- UI Logic ---
+
+    function showStatus(msg, type) {
+        const el = document.getElementById("status-msg");
+        el.style.display = "block";
+        el.className = ""; // clear classes
+        el.textContent = msg;
+        
+        if(type === "success") el.classList.add("status-success");
+        else if(type === "error") el.classList.add("status-error");
+        else el.classList.add("status-warn");
+    }
+
+    function updateTable() {
+        const tbody = document.getElementById("table-body");
+        const emptyState = document.getElementById("empty-state");
+        
+        if (scannedData.length > 0) {
+            emptyState.style.display = "none";
+        } else {
+            emptyState.style.display = "block";
+        }
+
+        // Clear current rows
+        tbody.innerHTML = "";
+
+        // Add rows in reverse order (newest first)
+        scannedData.slice().reverse().forEach(row => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td><strong>${row.id}</strong></td>
+                <td>${row.name}</td>
+                <td>${row.pin}</td>
+                <td>${row.sub}</td>
+                <td>${row.ship}</td>
+                <td style="color:var(--success); font-weight:bold;">${row.total}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // --- CSV Export Logic ---
+
+    function exportToCSV() {
+        if (scannedData.length === 0) {
+            alert("No data to export!");
+            return;
+        }
+
+        // CSV Header
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Order ID,Customer Name,Pin Code,Subtotal,Shipping,Total Price\r\n";
+
+        // CSV Rows
+        scannedData.forEach(row => {
+            // Escape commas in names just in case
+            const safeName = `"${row.name.replace(/"/g, '""')}"`;
+            // Ensure Pin code is treated as text if it has leading zeros
+            const safePin = `"${row.pin}"`;
+            
+            const rowString = `${row.id},${safeName},${safePin},${row.sub},${row.ship},${row.total}`;
+            csvContent += rowString + "\r\n";
+        });
+
+        // Trigger Download
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        
+        // Generate filename with current date
+        const dateStr = new Date().toISOString().slice(0,10);
+        link.setAttribute("download", `orders_${dateStr}.csv`);
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function clearData() {
+        if(confirm("Are you sure you want to clear all scanned data?")) {
+            scannedData = [];
+            updateTable();
+            showStatus("Data cleared.", "warn");
+        }
+    }
+</script>
+
+</body>
+</html>
