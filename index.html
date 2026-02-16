@@ -321,40 +321,57 @@
     }
 
     // --- CSV Export Logic ---
-
     function exportToCSV() {
         if (scannedData.length === 0) {
             alert("No data to export!");
             return;
         }
 
-        // CSV Header
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Order ID,Customer Name,Pin Code,Subtotal,Shipping,Total Price\r\n";
-
-        // CSV Rows
-        scannedData.forEach(row => {
-            // Escape commas in names just in case
+        // 1. Define Headers
+        const headers = ["Order ID", "Customer Name", "Pin Code", "Subtotal", "Shipping", "Total Price"];
+        
+        // 2. Build the CSV rows
+        // We map the scannedData array to an array of CSV strings
+        const rows = scannedData.map(row => {
+            // Safety: Escape quotes inside names by doubling them (Standard CSV rule)
             const safeName = `"${row.name.replace(/"/g, '""')}"`;
-            // Ensure Pin code is treated as text if it has leading zeros
-            const safePin = `"${row.pin}"`;
             
-            const rowString = `${row.id},${safeName},${safePin},${row.sub},${row.ship},${row.total}`;
-            csvContent += rowString + "\r\n";
+            // Safety: Force Pin to be treated as text to keep leading zeros (optional, but safe)
+            // Using standard quotes around the pin
+            const safePin = `"${row.pin}"`;
+
+            return [
+                row.id,
+                safeName,
+                safePin,
+                row.sub,
+                row.ship,
+                row.total
+            ].join(","); // Join columns with commas
         });
 
-        // Trigger Download
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
+        // 3. Combine headers and rows with newlines
+        const csvString = [headers.join(","), ...rows].join("\n");
+
+        // 4. Create a Blob (The correct way to handle file data)
+        const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
         
-        // Generate filename with current date
+        // 5. Create a temporary URL for the Blob
+        const url = URL.createObjectURL(blob);
+        
+        // 6. Trigger Download
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        // Add a timestamp to the filename
         const dateStr = new Date().toISOString().slice(0,10);
         link.setAttribute("download", `orders_${dateStr}.csv`);
         
         document.body.appendChild(link);
         link.click();
+        
+        // 7. Cleanup
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     function clearData() {
