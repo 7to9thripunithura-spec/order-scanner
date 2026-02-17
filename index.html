@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Res QR Scanner</title>
+    <title>Fixed High-Res Scanner</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
         :root {
@@ -56,16 +56,20 @@
         }
 
         /* Zoom Control */
-        #zoom-container {
+        #zoom-controls {
             margin-top: 15px;
             display: none; /* Hidden until camera starts */
             align-items: center;
             justify-content: center;
             gap: 10px;
+            padding: 10px;
+            background: #f1f5f9;
+            border-radius: 8px;
         }
         input[type=range] {
-            width: 70%;
+            width: 60%;
             cursor: pointer;
+            height: 25px;
         }
 
         /* Status Messages */
@@ -75,6 +79,7 @@
             border-radius: 6px;
             font-weight: 600;
             display: none;
+            word-break: break-all;
         }
         .status-success { background-color: #dcfce7; color: var(--success); border: 1px solid #86efac; }
         .status-error { background-color: #fee2e2; color: var(--error); border: 1px solid #fca5a5; }
@@ -90,12 +95,12 @@
 
         button {
             border: none;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
             transition: opacity 0.2s;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
         }
         button:active { opacity: 0.8; }
         
@@ -129,16 +134,16 @@
 <div class="container">
     <header>
         <h1>📦 Order Scanner Pro</h1>
-        <p>Optimized for tiny QR codes</p>
+        <p>Zoom-enabled for tiny codes</p>
     </header>
 
     <div class="scanner-card">
         <div id="reader"></div>
         
-        <div id="zoom-container">
+        <div id="zoom-controls">
             <span>🔍 Zoom:</span>
-            <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="handleZoom(this.value)">
-            <span id="zoom-value">1x</span>
+            <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1">
+            <span id="zoom-value">1.0x</span>
         </div>
 
         <div id="status-msg"></div>
@@ -176,35 +181,33 @@
     let html5QrcodeScanner;
     let scannedData = [];
     let isScanning = false;
-    let currentZoom = 1;
     let videoTrack = null;
-    let capabilities = {};
 
     async function startScanner() {
-        const readerElement = document.getElementById("reader");
+        const statusEl = document.getElementById("status-msg");
         document.getElementById("start-btn").style.display = 'none';
         document.getElementById("stop-btn").style.display = 'inline-block';
-        showStatus("Initializing high-res camera...", "warn");
+        showStatus("Starting camera...", "warn");
 
         try {
-            html5QrcodeScanner = new Html5Qrcode("reader");
-            
-            // 1. IMPROVED CONFIG FOR TINY CODES
+            // Re-initialize scanner instance if needed
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+            }
+
+            // --- CONFIGURATION ---
             const config = { 
-                fps: 15, // Higher FPS for smoother tracking
-                qrbox: { width: 300, height: 300 }, // Slightly larger scan box
-                aspectRatio: 1.0,
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true // Uses native Android/iOS scanner (Much better at tiny codes)
-                }
+                fps: 15,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0
             };
             
-            // 2. HIGH RESOLUTION CONSTRAINTS
+            // --- CONSTRAINTS (FIXED) ---
+            // We use 'ideal' instead of 'min/max' to prevent crashes on incompatible phones
             const constraints = { 
                 facingMode: "environment",
-                focusMode: "continuous", // Vital for close-ups
-                width: { min: 1024, ideal: 1920, max: 3840 }, // Request 1080p or 4K
-                height: { min: 768, ideal: 1080, max: 2160 } 
+                width: { ideal: 1920 }, // Try for 1080p
+                height: { ideal: 1080 } 
             };
             
             await html5QrcodeScanner.start(
@@ -214,63 +217,67 @@
                 onScanFailure
             );
             
-            // 3. ENABLE ZOOM CAPABILITIES
-            setupZoom();
-
-            showStatus("Camera Active. Use slider to Zoom.", "success");
             isScanning = true;
+            showStatus("Camera Active. Zoom available below.", "success");
+
+            // --- ENABLE ZOOM ---
+            // Wait 500ms for the video element to actually load in the DOM
+            setTimeout(initZoom, 500);
 
         } catch (err) {
             console.error(err);
-            showStatus("Error starting camera: " + err, "error");
-            stopScanner();
+            // Show the actual error message to the user
+            showStatus("Camera Error: " + err.name + " - " + err.message, "error");
+            document.getElementById("start-btn").style.display = 'inline-block';
+            document.getElementById("stop-btn").style.display = 'none';
         }
     }
 
-    // New Function to handle Zoom UI
-    function setupZoom() {
-        // Wait slightly for camera to settle
-        setTimeout(() => {
-            try {
-                // Access internal video track
-                // Note: html5-qrcode doesn't expose track directly easily, 
-                // but we can try to fetch capabilities if supported by the browser.
-                const videoElement = document.querySelector("#reader video");
-                if (videoElement && videoElement.srcObject) {
-                    videoTrack = videoElement.srcObject.getVideoTracks()[0];
-                    capabilities = videoTrack.getCapabilities();
-
-                    // Check if zoom is supported
-                    if (capabilities.zoom) {
-                        const slider = document.getElementById("zoom-slider");
-                        const container = document.getElementById("zoom-container");
-                        
-                        // Set slider limits based on hardware
-                        slider.min = capabilities.zoom.min;
-                        slider.max = capabilities.zoom.max;
-                        slider.step = capabilities.zoom.step || 0.1;
-                        slider.value = 1;
-
-                        container.style.display = "flex";
-                        console.log("Zoom capabilities loaded:", capabilities.zoom);
-                    }
-                }
-            } catch (e) {
-                console.log("Zoom not supported on this device/browser", e);
+    function initZoom() {
+        try {
+            const videoElement = document.querySelector("#reader video");
+            if (!videoElement || !videoElement.srcObject) {
+                console.log("Video element not found yet.");
+                return;
             }
-        }, 500);
+
+            const stream = videoElement.srcObject;
+            videoTrack = stream.getVideoTracks()[0];
+            const capabilities = videoTrack.getCapabilities();
+
+            // Check if device supports zoom
+            if (capabilities && capabilities.zoom) {
+                const slider = document.getElementById("zoom-slider");
+                const zoomControls = document.getElementById("zoom-controls");
+                
+                slider.min = capabilities.zoom.min;
+                slider.max = capabilities.zoom.max;
+                slider.step = capabilities.zoom.step || 0.1;
+                slider.value = 1;
+                
+                // Attach listener here to ensure track is ready
+                slider.oninput = function() {
+                    applyZoom(this.value);
+                };
+
+                zoomControls.style.display = "flex";
+            } else {
+                console.log("Zoom not supported on this device.");
+            }
+        } catch (e) {
+            console.log("Zoom setup failed: ", e);
+        }
     }
 
-    // Called when slider moves
-    async function handleZoom(value) {
-        document.getElementById("zoom-value").innerText = value + "x";
-        if (videoTrack && capabilities.zoom) {
+    async function applyZoom(value) {
+        document.getElementById("zoom-value").innerText = parseFloat(value).toFixed(1) + "x";
+        if (videoTrack) {
             try {
                 await videoTrack.applyConstraints({
                     advanced: [{ zoom: parseFloat(value) }]
                 });
             } catch (err) {
-                console.error("Zoom failed", err);
+                console.log("Zoom apply failed", err);
             }
         }
     }
@@ -279,38 +286,41 @@
         if (html5QrcodeScanner && isScanning) {
             try {
                 await html5QrcodeScanner.stop();
-                html5QrcodeScanner.clear();
             } catch(e) { console.log(e); }
             isScanning = false;
         }
         document.getElementById("start-btn").style.display = 'inline-block';
         document.getElementById("stop-btn").style.display = 'none';
-        document.getElementById("zoom-container").style.display = 'none'; // Hide zoom
+        document.getElementById("zoom-controls").style.display = 'none';
         showStatus("Camera stopped.", "warn");
     }
 
+    // --- SCAN SUCCESS LOGIC ---
     function onScanSuccess(decodedText, decodedResult) {
         try {
             let data;
             try {
                 data = JSON.parse(decodedText);
             } catch (e) {
-                // If it's not JSON, maybe log it anyway or error out
-                throw new Error("Invalid QR Format. Must be JSON.");
+                // Ignore non-JSON scans quietly or show error
+                console.log("Non-JSON scan ignored");
+                return;
             }
 
             if(!data.id || !data.name) {
-                throw new Error("Missing Order ID or Name.");
+                showStatus("Invalid QR: Missing ID/Name", "error");
+                return;
             }
 
+            // Check Duplicate
             const isDuplicate = scannedData.some(item => item.id === data.id);
             if (isDuplicate) {
-                showStatus(`⚠️ Duplicate Order: ${data.id}`, "error");
-                // Don't stop scanning for duplicates, just pause briefly
+                showStatus(`⚠️ Duplicate: ${data.id}`, "warn");
                 pauseScanner(2000);
                 return;
             }
 
+            // Process
             const subtotal = parseFloat(data.sub) || 0;
             const shipping = parseFloat(data.ship) || 0;
             const total = subtotal + shipping;
@@ -329,6 +339,7 @@
             updateTable();
             showStatus(`✅ Scanned: ${data.id}`, "success");
             
+            // Pause to prevent double scan
             pauseScanner(1500);
 
         } catch (err) {
@@ -337,7 +348,7 @@
     }
 
     function pauseScanner(ms) {
-        if(html5QrcodeScanner) {
+        if(html5QrcodeScanner && isScanning) {
             html5QrcodeScanner.pause();
             setTimeout(() => {
                 if(isScanning) html5QrcodeScanner.resume();
@@ -346,11 +357,10 @@
     }
 
     function onScanFailure(error) {
-        // Keep empty to avoid console noise
+        // No action needed
     }
 
-    // --- Standard UI Logic (Same as before) ---
-
+    // --- UI HELPERS ---
     function showStatus(msg, type) {
         const el = document.getElementById("status-msg");
         el.style.display = "block";
@@ -366,11 +376,8 @@
         const tbody = document.getElementById("table-body");
         const emptyState = document.getElementById("empty-state");
         
-        if (scannedData.length > 0) {
-            emptyState.style.display = "none";
-        } else {
-            emptyState.style.display = "block";
-        }
+        if (scannedData.length > 0) emptyState.style.display = "none";
+        else emptyState.style.display = "block";
 
         tbody.innerHTML = "";
         scannedData.slice().reverse().forEach(row => {
@@ -386,8 +393,6 @@
             tbody.appendChild(tr);
         });
     }
-
-    // --- CSV Export Logic (Same as before) ---
 
     function exportToCSV() {
         if (scannedData.length === 0) {
@@ -414,7 +419,7 @@
     }
 
     function clearData() {
-        if(confirm("Are you sure you want to clear all scanned data?")) {
+        if(confirm("Clear all data?")) {
             scannedData = [];
             updateTable();
             showStatus("Data cleared.", "warn");
