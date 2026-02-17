@@ -3,429 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fixed High-Res Scanner</title>
+    <title>Safe QR Scanner</title>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <style>
-        :root {
-            --primary: #2563eb;
-            --success: #16a34a;
-            --warning: #ca8a04;
-            --error: #dc2626;
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --text: #1e293b;
-        }
-
-        body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 900px;
-        }
-
-        /* Header */
-        header { text-align: center; margin-bottom: 20px; }
-        h1 { margin: 0; font-size: 1.5rem; }
-        p { color: #64748b; font-size: 0.9rem; margin-top: 5px; }
-
-        /* Scanner Area */
-        .scanner-card {
-            background: var(--card);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        #reader {
-            width: 100%;
-            border-radius: 8px;
-            overflow: hidden;
-            background: #000;
-            min-height: 300px;
-        }
-
-        /* Zoom Control */
-        #zoom-controls {
-            margin-top: 15px;
-            display: none; /* Hidden until camera starts */
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 10px;
-            background: #f1f5f9;
-            border-radius: 8px;
-        }
-        input[type=range] {
-            width: 60%;
-            cursor: pointer;
-            height: 25px;
-        }
-
-        /* Status Messages */
-        #status-msg {
-            margin-top: 15px;
-            padding: 10px;
-            border-radius: 6px;
-            font-weight: 600;
-            display: none;
-            word-break: break-all;
-        }
-        .status-success { background-color: #dcfce7; color: var(--success); border: 1px solid #86efac; }
-        .status-error { background-color: #fee2e2; color: var(--error); border: 1px solid #fca5a5; }
-        .status-warn { background-color: #fef9c3; color: var(--warning); border: 1px solid #fde047; }
-
-        /* Controls */
-        .controls {
-            display: flex;
-            gap: 10px;
-            justify-content: space-between;
-            margin-bottom: 15px;
-        }
-
-        button {
-            border: none;
-            padding: 12px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            font-size: 0.95rem;
-        }
-        button:active { opacity: 0.8; }
-        
-        .btn-primary { background-color: var(--primary); color: white; }
-        .btn-download { background-color: var(--success); color: white; }
-        .btn-clear { background-color: var(--error); color: white; }
-
-        /* Data Table */
-        .table-container {
-            background: var(--card);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            overflow-x: auto;
-        }
-
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-        th { background-color: #f1f5f9; font-weight: 600; }
-        .empty-state { padding: 20px; text-align: center; color: #94a3b8; }
-
-        @media (max-width: 600px) {
-            h1 { font-size: 1.25rem; }
-            th, td { padding: 8px; font-size: 0.8rem; }
-            .controls { flex-direction: column; }
-            button { width: 100%; }
-        }
+        :root { --primary: #2563eb; --success: #16a34a; --warning: #ca8a04; --error: #dc2626; --bg: #f8fafc; --card: #ffffff; --text: #1e293b; }
+        body { font-family: sans-serif; background-color: var(--bg); color: var(--text); padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 600px; }
+        .scanner-card { background: var(--card); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 15px; margin-bottom: 20px; text-align: center; }
+        #reader { width: 100%; border-radius: 8px; overflow: hidden; background: #000; min-height: 250px; }
+        #status-msg { margin-top: 15px; padding: 10px; border-radius: 6px; font-weight: 600; display: none; font-size: 0.9rem; }
+        .status-success { background-color: #dcfce7; color: var(--success); }
+        .status-error { background-color: #fee2e2; color: var(--error); }
+        .status-warn { background-color: #fef9c3; color: var(--warning); }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        button { flex: 1; border: none; padding: 12px; border-radius: 8px; font-weight: 600; cursor: pointer; color: white; }
+        .btn-primary { background-color: var(--primary); }
+        .btn-download { background-color: var(--success); }
+        .table-container { background: var(--card); border-radius: 12px; width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <header>
-        <h1>📦 Order Scanner Pro</h1>
-        <p>Zoom-enabled for tiny codes</p>
-    </header>
-
     <div class="scanner-card">
         <div id="reader"></div>
-        
-        <div id="zoom-controls">
-            <span>🔍 Zoom:</span>
-            <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1">
-            <span id="zoom-value">1.0x</span>
-        </div>
-
         <div id="status-msg"></div>
     </div>
 
     <div class="controls">
-        <button id="start-btn" class="btn-primary" onclick="startScanner()">Activate Camera</button>
-        <button id="stop-btn" class="btn-primary" onclick="stopScanner()" style="display:none; background-color: #64748b;">Stop Camera</button>
-        <button class="btn-download" onclick="exportToCSV()">Download CSV</button>
+        <button id="start-btn" class="btn-primary" onclick="startScanner()">Start Camera</button>
+        <button id="stop-btn" class="btn-primary" onclick="stopScanner()" style="display:none; background: #64748b;">Stop</button>
+        <button class="btn-download" onclick="exportToCSV()">Export CSV</button>
     </div>
 
     <div class="table-container">
-        <table id="data-table">
-            <thead>
-                <tr>
-                    <th>Order ID</th>
-                    <th>Name</th>
-                    <th>Pin Code</th>
-                    <th>Subtotal</th>
-                    <th>Ship</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
+        <table>
+            <thead><tr><th>ID</th><th>Name</th><th>Total</th></tr></thead>
             <tbody id="table-body"></tbody>
         </table>
-        <div id="empty-state" class="empty-state">No scans yet.</div>
-    </div>
-    
-    <div style="text-align: right; margin-top: 10px;">
-        <button class="btn-clear" onclick="clearData()" style="padding: 5px 10px; font-size: 0.8rem;">Clear All Data</button>
     </div>
 </div>
 
 <script>
-    let html5QrcodeScanner;
+    let html5Qr;
     let scannedData = [];
-    let isScanning = false;
-    let videoTrack = null;
 
-    async function startScanner() {
+    function startScanner() {
         const statusEl = document.getElementById("status-msg");
         document.getElementById("start-btn").style.display = 'none';
         document.getElementById("stop-btn").style.display = 'inline-block';
-        showStatus("Starting camera...", "warn");
+        
+        showStatus("Requesting Camera Permission...", "warn");
 
-        try {
-            // Re-initialize scanner instance if needed
-            if (!html5QrcodeScanner) {
-                html5QrcodeScanner = new Html5Qrcode("reader");
-            }
+        // Use the simplest possible initialization
+        html5Qr = new Html5Qrcode("reader");
 
-            // --- CONFIGURATION ---
-            const config = { 
-                fps: 15,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0
-            };
-            
-            // --- CONSTRAINTS (FIXED) ---
-            // We use 'ideal' instead of 'min/max' to prevent crashes on incompatible phones
-            const constraints = { 
-                facingMode: "environment",
-                width: { ideal: 1920 }, // Try for 1080p
-                height: { ideal: 1080 } 
-            };
-            
-            await html5QrcodeScanner.start(
-                constraints, 
-                config, 
-                onScanSuccess, 
-                onScanFailure
-            );
-            
-            isScanning = true;
-            showStatus("Camera Active. Zoom available below.", "success");
+        // NO high-res constraints - let the browser decide
+        const config = { fps: 10, qrbox: 250 };
 
-            // --- ENABLE ZOOM ---
-            // Wait 500ms for the video element to actually load in the DOM
-            setTimeout(initZoom, 500);
-
-        } catch (err) {
-            console.error(err);
-            // Show the actual error message to the user
-            showStatus("Camera Error: " + err.name + " - " + err.message, "error");
+        html5Qr.start(
+            { facingMode: "environment" }, 
+            config, 
+            onScanSuccess, 
+            onScanFailure
+        ).catch(err => {
+            showStatus("Error: " + err, "error");
             document.getElementById("start-btn").style.display = 'inline-block';
             document.getElementById("stop-btn").style.display = 'none';
-        }
-    }
-
-    function initZoom() {
-        try {
-            const videoElement = document.querySelector("#reader video");
-            if (!videoElement || !videoElement.srcObject) {
-                console.log("Video element not found yet.");
-                return;
-            }
-
-            const stream = videoElement.srcObject;
-            videoTrack = stream.getVideoTracks()[0];
-            const capabilities = videoTrack.getCapabilities();
-
-            // Check if device supports zoom
-            if (capabilities && capabilities.zoom) {
-                const slider = document.getElementById("zoom-slider");
-                const zoomControls = document.getElementById("zoom-controls");
-                
-                slider.min = capabilities.zoom.min;
-                slider.max = capabilities.zoom.max;
-                slider.step = capabilities.zoom.step || 0.1;
-                slider.value = 1;
-                
-                // Attach listener here to ensure track is ready
-                slider.oninput = function() {
-                    applyZoom(this.value);
-                };
-
-                zoomControls.style.display = "flex";
-            } else {
-                console.log("Zoom not supported on this device.");
-            }
-        } catch (e) {
-            console.log("Zoom setup failed: ", e);
-        }
-    }
-
-    async function applyZoom(value) {
-        document.getElementById("zoom-value").innerText = parseFloat(value).toFixed(1) + "x";
-        if (videoTrack) {
-            try {
-                await videoTrack.applyConstraints({
-                    advanced: [{ zoom: parseFloat(value) }]
-                });
-            } catch (err) {
-                console.log("Zoom apply failed", err);
-            }
-        }
+        });
     }
 
     async function stopScanner() {
-        if (html5QrcodeScanner && isScanning) {
-            try {
-                await html5QrcodeScanner.stop();
-            } catch(e) { console.log(e); }
-            isScanning = false;
+        if (html5Qr) {
+            await html5Qr.stop();
+            html5Qr.clear();
         }
         document.getElementById("start-btn").style.display = 'inline-block';
         document.getElementById("stop-btn").style.display = 'none';
-        document.getElementById("zoom-controls").style.display = 'none';
         showStatus("Camera stopped.", "warn");
     }
 
-    // --- SCAN SUCCESS LOGIC ---
-    function onScanSuccess(decodedText, decodedResult) {
+    function onScanSuccess(decodedText) {
         try {
-            let data;
-            try {
-                data = JSON.parse(decodedText);
-            } catch (e) {
-                // Ignore non-JSON scans quietly or show error
-                console.log("Non-JSON scan ignored");
+            const data = JSON.parse(decodedText);
+            if(scannedData.some(item => item.id === data.id)) {
+                showStatus("Duplicate: " + data.id, "warn");
                 return;
             }
-
-            if(!data.id || !data.name) {
-                showStatus("Invalid QR: Missing ID/Name", "error");
-                return;
-            }
-
-            // Check Duplicate
-            const isDuplicate = scannedData.some(item => item.id === data.id);
-            if (isDuplicate) {
-                showStatus(`⚠️ Duplicate: ${data.id}`, "warn");
-                pauseScanner(2000);
-                return;
-            }
-
-            // Process
-            const subtotal = parseFloat(data.sub) || 0;
-            const shipping = parseFloat(data.ship) || 0;
-            const total = subtotal + shipping;
-            const pin = data.pin || "N/A";
-
+            
             const record = {
                 id: data.id,
                 name: data.name,
-                pin: pin,
-                sub: subtotal.toFixed(2),
-                ship: shipping.toFixed(2),
-                total: total.toFixed(2)
+                total: (parseFloat(data.sub || 0) + parseFloat(data.ship || 0)).toFixed(2)
             };
 
             scannedData.push(record);
-            updateTable();
-            showStatus(`✅ Scanned: ${data.id}`, "success");
+            renderTable();
+            showStatus("Scanned: " + data.id, "success");
             
-            // Pause to prevent double scan
-            pauseScanner(1500);
-
-        } catch (err) {
-            showStatus(err.message, "error");
+            html5Qr.pause();
+            setTimeout(() => html5Qr.resume(), 2000);
+        } catch (e) {
+            console.log("Not a valid JSON QR");
         }
     }
 
-    function pauseScanner(ms) {
-        if(html5QrcodeScanner && isScanning) {
-            html5QrcodeScanner.pause();
-            setTimeout(() => {
-                if(isScanning) html5QrcodeScanner.resume();
-            }, ms);
-        }
-    }
+    function onScanFailure() {}
 
-    function onScanFailure(error) {
-        // No action needed
-    }
-
-    // --- UI HELPERS ---
     function showStatus(msg, type) {
         const el = document.getElementById("status-msg");
         el.style.display = "block";
-        el.className = "";
-        el.textContent = msg;
-        
-        if(type === "success") el.classList.add("status-success");
-        else if(type === "error") el.classList.add("status-error");
-        else el.classList.add("status-warn");
+        el.className = "status-" + type;
+        el.innerText = msg;
     }
 
-    function updateTable() {
-        const tbody = document.getElementById("table-body");
-        const emptyState = document.getElementById("empty-state");
-        
-        if (scannedData.length > 0) emptyState.style.display = "none";
-        else emptyState.style.display = "block";
-
-        tbody.innerHTML = "";
-        scannedData.slice().reverse().forEach(row => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
-                <td><strong>${row.id}</strong></td>
-                <td>${row.name}</td>
-                <td>${row.pin}</td>
-                <td>${row.sub}</td>
-                <td>${row.ship}</td>
-                <td style="color:var(--success); font-weight:bold;">${row.total}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+    function renderTable() {
+        const body = document.getElementById("table-body");
+        body.innerHTML = scannedData.map(row => 
+            `<tr><td>${row.id}</td><td>${row.name}</td><td>${row.total}</td></tr>`
+        ).join('');
     }
 
     function exportToCSV() {
-        if (scannedData.length === 0) {
-            alert("No data to export!");
-            return;
-        }
-        let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Order ID,Customer Name,Pin Code,Subtotal,Shipping,Total Price\r\n";
-
-        scannedData.forEach(row => {
-            const safeName = `"${row.name.replace(/"/g, '""')}"`;
-            const safePin = `"${row.pin}"`;
-            csvContent += `${row.id},${safeName},${safePin},${row.sub},${row.ship},${row.total}\r\n`;
-        });
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        const dateStr = new Date().toISOString().slice(0,10);
-        link.setAttribute("download", `orders_${dateStr}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-
-    function clearData() {
-        if(confirm("Clear all data?")) {
-            scannedData = [];
-            updateTable();
-            showStatus("Data cleared.", "warn");
-        }
+        if (scannedData.length === 0) return alert("No data");
+        let csv = "ID,Name,Total\n" + scannedData.map(r => `${r.id},${r.name},${r.total}`).join("\n");
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'scans.csv';
+        a.click();
     }
 </script>
-
 </body>
 </html>
